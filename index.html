@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة الأقساط - كلية الهندسة / جامعة كلكامش</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Firebase data layer (exposes window.StudentDB) -->
+    <script type="module" src="db.js"></script>
+
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #f8fafc; }
+        .font-num { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Smooth transitions */
+        .transition-all-200 { transition: all 0.2s ease-in-out; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; color: black !important; font-size: 10pt; }
+            .print-header { display: flex !important; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 12px; }
+            table { width: 100% !important; border: 1px solid #000 !important; font-size: 8.5pt !important; }
+            th, td { border: 1px solid #333 !important; padding: 4px 6px !important; }
+            thead { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .shadow, .shadow-xl, .shadow-2xl { box-shadow: none !important; }
+            .badge-print { border: 1px solid #666; padding: 2px 4px; }
+        }
+        .print-only { display: none; }
+    </style>
+</head>
+<body class="text-slate-900 min-h-screen flex flex-col antialiased bg-slate-100">
+
+    <!-- Official Print Header (Only visible on window.print) -->
+    <div class="print-only print-header items-center justify-between px-6 pt-4">
+        <div class="text-right">
+            <h2 class="text-base font-black">جمهورية العراق - وزارة التعليم العالي والبحث العلمي</h2>
+            <h1 class="text-lg font-black text-slate-900">جامعة كلكامش - كلية الهندسة</h1>
+            <p class="text-xs text-slate-600 font-bold">تقرير سداد الأقساط الدراسية للطلبة</p>
+        </div>
+        <div class="text-center">
+            <img id="printLogo" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="شعار الكلية" class="w-16 h-16 object-contain mx-auto">
+        </div>
+        <div class="text-left text-xs font-bold text-slate-600">
+            <p>تاريخ التقرير: <span id="printDate" class="font-num"></span></p>
+            <p>إجمالي الطلبة: <span id="printStudentCount" class="font-num"></span></p>
+        </div>
+    </div>
+
+    <!-- Header Section -->
+    <header class="bg-slate-950 text-white shadow-2xl no-print border-b-4 border-indigo-600 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                
+                <!-- Logo & Title -->
+                <div class="flex items-center gap-4">
+                    <div class="relative group">
+                        <div class="w-14 h-14 bg-white p-1 rounded-2xl shadow-xl border-2 border-indigo-400 flex items-center justify-center overflow-hidden">
+                            <img id="collegeLogo" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="شعار الكلية" class="w-full h-full object-contain">
+                        </div>
+                        <label class="absolute -bottom-1 -right-1 bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-full text-xs shadow-lg cursor-pointer transition transform hover:scale-110" title="تغيير شعار الكلية من جهازك">
+                            <i class="fas fa-camera"></i>
+                            <input type="file" id="logoFileInput" accept="image/*" class="hidden" onchange="uploadLogoFromComputer(event)">
+                        </label>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-indigo-400 text-xs font-black tracking-wider uppercase">كلية الهندسة / جامعة كلكامش</span>
+                            <span id="dbStatusBadge" class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] px-2.5 py-0.5 rounded-full font-black flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-current animate-pulse"></span>
+                                <span id="dbStatusText">جاري الاتصال...</span>
+                            </span>
+                        </div>
+                        <h1 class="text-xl md:text-2xl font-black text-white mt-0.5 tracking-tight flex items-center gap-2">
+                            <span>نظام إدارة الأقساط</span>
+                        </h1>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="downloadSampleExcel()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition">
+                        <i class="fas fa-file-excel text-emerald-400 text-sm"></i>
+                        <span>قالب Excel</span>
+                    </button>
+                    
+                    <label class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition">
+                        <i class="fas fa-file-upload text-indigo-200 text-sm"></i>
+                        <span>استيراد ملف Excel</span>
+                        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)">
+                    </label>
+
+                    <button onclick="openAddModal()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-amber-400/20 transition">
+                        <i class="fas fa-user-plus text-sm"></i>
+                        <span>إضافة طالب جديد</span>
+                    </button>
+
+                    <button id="migrateLocalBtn" onclick="migrateLocalData()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition" title="رفع السجلات المحفوظة سابقاً في هذا المتصفح إلى قاعدة البيانات">
+                        <i class="fas fa-cloud-arrow-up text-sm"></i>
+                        <span>نقل البيانات المحلية (<span id="localCount" class="font-num">0</span>)</span>
+                    </button>
+
+                    <button onclick="resetToSampleData()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-xl text-xs font-black transition" title="إضافة البيانات التجريبية">
+                        <i class="fas fa-rotate-left"></i>
+                    </button>
+
+                    <button onclick="logout()" class="bg-slate-800 hover:bg-rose-700 text-slate-300 hover:text-white px-3 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition" title="تسجيل الخروج">
+                        <i class="fas fa-right-from-bracket"></i>
+                        <span id="currentUserEmail" class="font-num text-[11px] hidden sm:inline"></span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 no-print">
+            <div class="bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition border-2 border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-black text-slate-500 mb-1">العدد الإجمالي للطلبة</p>
+                    <h3 id="statTotalStudents" class="text-2xl font-black text-slate-900 font-num">0</h3>
+                </div>
+                <div class="w-12 h-12 bg-indigo-50 text-indigo-700 rounded-2xl flex items-center justify-center text-xl border border-indigo-100">
+                    <i class="fas fa-users"></i>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition border-2 border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-black text-slate-500 mb-1">إجمالي المبالغ المطلوبة</p>
+                    <h3 id="statTotalRequired" class="text-sm font-black text-indigo-950">0 IQD</h3>
+                </div>
+                <div class="w-12 h-12 bg-blue-50 text-blue-700 rounded-2xl flex items-center justify-center text-xl border border-blue-100">
+                    <i class="fas fa-coins"></i>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition border-2 border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-black text-slate-500 mb-1">إجمالي المبلغ المسدد</p>
+                    <h3 id="statTotalPaid" class="text-sm font-black text-emerald-700">0 IQD</h3>
+                </div>
+                <div class="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-2xl flex items-center justify-center text-xl border border-emerald-100">
+                    <i class="fas fa-hand-holding-dollar"></i>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition border-2 border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-black text-slate-500 mb-1">إجمالي المبالغ المتبقية</p>
+                    <h3 id="statTotalRemaining" class="text-sm font-black text-rose-700">0 IQD</h3>
+                </div>
+                <div class="w-12 h-12 bg-rose-50 text-rose-700 rounded-2xl flex items-center justify-center text-xl border border-rose-100">
+                    <i class="fas fa-scale-unbalanced"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Toolbar -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-200 mb-6 no-print space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div class="lg:col-span-2 relative">
+                    <i class="fas fa-search absolute right-3.5 top-3.5 text-slate-400"></i>
+                    <input type="text" id="searchInput" oninput="renderStudentsTable()" placeholder="ابحث باسم الطالب أو رقم أي وصل..." class="w-full pl-3 pr-10 py-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white focus:outline-none transition">
+                </div>
+
+                <div>
+                    <select id="deptFilter" onchange="renderStudentsTable()" class="w-full py-2.5 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white focus:outline-none transition">
+                        <option value="">جميع الأقسام العلمية</option>
+                    </select>
+                </div>
+
+                <div>
+                    <select id="stageFilter" onchange="renderStudentsTable()" class="w-full py-2.5 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white focus:outline-none transition">
+                        <option value="">جميع المراحل</option>
+                        <option value="المرحلة الأولى">المرحلة الأولى</option>
+                        <option value="المرحلة الثانية">المرحلة الثانية</option>
+                        <option value="المرحلة الثالثة">المرحلة الثالثة</option>
+                        <option value="المرحلة الرابعة">المرحلة الرابعة</option>
+                        <option value="المرحلة الخامسة">المرحلة الخامسة</option>
+                    </select>
+                </div>
+
+                <div>
+                    <select id="studyFilter" onchange="renderStudentsTable()" class="w-full py-2.5 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white focus:outline-none transition">
+                        <option value="">نوع الدراسة (الكل)</option>
+                        <option value="صباحي">صباحي</option>
+                        <option value="مسائي">مسائي</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-xs font-black text-slate-700 ml-1">تصفية السداد:</span>
+                    <button onclick="setFilterStatus('all')" id="statusBtnAll" class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition">الكل</button>
+                    <button onclick="setFilterStatus('p25')" id="statusBtnP25" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">25% فما فوق</button>
+                    <button onclick="setFilterStatus('p50')" id="statusBtnP50" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">50% فما فوق</button>
+                    <button onclick="setFilterStatus('p75')" id="statusBtnP75" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">75% فما فوق</button>
+                    <button onclick="setFilterStatus('p100')" id="statusBtnP100" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">100% (مسدد بالكامل)</button>
+                    <button onclick="setFilterStatus('none')" id="statusBtnNone" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition">0% (غير مسدد)</button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="bulkDeleteBtn" onclick="confirmDeleteSelected()" class="hidden bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow transition">
+                        <i class="fas fa-trash-can"></i>
+                        <span>حذف المحدد (<span id="selectedCount" class="font-num">0</span>)</span>
+                    </button>
+
+                    <button onclick="exportToExcel()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition">
+                        <i class="fas fa-file-export text-emerald-600"></i> تصدير إكسل
+                    </button>
+                    <button onclick="printReport()" class="bg-slate-200 hover:bg-slate-300 text-slate-900 border border-slate-300 px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition">
+                        <i class="fas fa-print"></i> طباعة التقرير
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Data Table -->
+        <div class="bg-white rounded-2xl shadow-sm border-2 border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse">
+                    <thead>
+                        <tr class="bg-slate-950 text-white text-xs font-black">
+                            <th class="p-3.5 border-b border-slate-800 text-center w-10 no-print">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer">
+                            </th>
+                            <th class="p-3.5 border-b border-slate-800 text-center w-12 font-num">#</th>
+                            <th class="p-4 border-b border-slate-800 min-w-[170px]">اسم الطالب الرباعي</th>
+                            <th class="p-4 border-b border-slate-800 min-w-[140px]">القسم والمرحلة</th>
+                            <th class="p-4 border-b border-slate-800 text-center min-w-[80px]">الدراسة</th>
+                            <th class="p-4 border-b border-slate-800 text-left min-w-[120px]">القسط السنوي</th>
+                            <th class="p-3 border-b border-slate-800 text-center min-w-[110px]">الدفعة 1</th>
+                            <th class="p-3 border-b border-slate-800 text-center min-w-[110px]">الدفعة 2</th>
+                            <th class="p-3 border-b border-slate-800 text-center min-w-[110px]">الدفعة 3</th>
+                            <th class="p-3 border-b border-slate-800 text-center min-w-[110px]">الدفعة 4</th>
+                            <th class="p-4 border-b border-slate-800 text-left min-w-[120px]">المسدد الكلي</th>
+                            <th class="p-4 border-b border-slate-800 text-left min-w-[120px]">المتبقي</th>
+                            <th class="p-4 border-b border-slate-800 text-center min-w-[160px]">نسبة وحالة السداد</th>
+                            <th class="p-4 border-b border-slate-800 text-center no-print min-w-[90px]">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody" class="divide-y divide-slate-200 text-xs font-bold">
+                        <!-- Student Rows Rendered Here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Form (Add / Edit Student) -->
+    <div id="studentModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4 transition-all">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border-2 border-slate-300 animate-in fade-in zoom-in-95 duration-150">
+            <div class="bg-slate-950 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+                <h3 id="modalTitle" class="font-black text-sm flex items-center gap-2">
+                    <i class="fas fa-user-pen text-amber-400"></i>
+                    <span>بيانات الطالب والأقساط</span>
+                </h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl font-bold transition">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="studentForm" onsubmit="saveStudent(event)" class="p-6 space-y-4">
+                <input type="hidden" id="studentDocId">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-black text-slate-800 mb-1">اسم الطالب الرباعي *</label>
+                        <input type="text" id="modalName" required placeholder="أدخل اسم الطالب الرباعي بالكامل..." class="w-full px-3 py-2 border-2 border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black text-slate-800 mb-1">القسم العلمي *</label>
+                        <input type="text" id="modalDept" required placeholder="مثال: هندسة تقنيات الحاسوب" class="w-full px-3 py-2 border-2 border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black text-slate-800 mb-1">المرحلة الدراسية *</label>
+                        <select id="modalStage" required class="w-full px-3 py-2 border-2 border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                            <option value="المرحلة الأولى">المرحلة الأولى</option>
+                            <option value="المرحلة الثانية">المرحلة الثانية</option>
+                            <option value="المرحلة الثالثة">المرحلة الثالثة</option>
+                            <option value="المرحلة الرابعة">المرحلة الرابعة</option>
+                            <option value="المرحلة الخامسة">المرحلة الخامسة</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black text-slate-800 mb-1">نوع الدراسة *</label>
+                        <select id="modalStudy" required class="w-full px-3 py-2 border-2 border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                            <option value="صباحي">صباحي</option>
+                            <option value="مسائي">مسائي</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black text-slate-800 mb-1">القسط السنوي الكلي (IQD) *</label>
+                        <input type="number" id="modalTotalTuition" required min="0" step="500" placeholder="مثال: 2500000" class="w-full px-3 py-2 border-2 border-slate-300 rounded-xl text-xs font-num font-black text-indigo-950 focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-200 pt-3">
+                    <p class="text-xs font-black text-indigo-900 mb-2 flex items-center gap-1.5">
+                        <i class="fas fa-receipt"></i>
+                        <span>سجل الدفعات وأرقام الوصولات:</span>
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-300">
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">الدفعة 1 (IQD)</label>
+                            <input type="number" id="modalP1" min="0" step="500" placeholder="0" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-black focus:ring-1 focus:ring-indigo-600">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">وصل 1</label>
+                            <input type="text" id="modalR1" placeholder="رقم الوصل..." class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-bold text-indigo-900 focus:ring-1 focus:ring-indigo-600">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">الدفعة 2 (IQD)</label>
+                            <input type="number" id="modalP2" min="0" step="500" placeholder="0" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-black focus:ring-1 focus:ring-indigo-600">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">وصل 2</label>
+                            <input type="text" id="modalR2" placeholder="رقم الوصل..." class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-bold text-indigo-900 focus:ring-1 focus:ring-indigo-600">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">الدفعة 3 (IQD)</label>
+                            <input type="number" id="modalP3" min="0" step="500" placeholder="0" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-black focus:ring-1 focus:ring-indigo-600">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">وصل 3</label>
+                            <input type="text" id="modalR3" placeholder="رقم الوصل..." class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-bold text-indigo-900 focus:ring-1 focus:ring-indigo-600">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">الدفعة 4 (IQD)</label>
+                            <input type="number" id="modalP4" min="0" step="500" placeholder="0" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-black focus:ring-1 focus:ring-indigo-600">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-black text-slate-700 mb-1">وصل 4</label>
+                            <input type="text" id="modalR4" placeholder="رقم الوصل..." class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-num font-bold text-indigo-900 focus:ring-1 focus:ring-indigo-600">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-black transition">إلغاء</button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-600/30 transition">حفظ البيانات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal (Modern replacement for browser confirm) -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4 transition-all">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-slate-300 animate-in fade-in zoom-in-95 duration-150 p-6 text-center">
+            <div class="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                <i class="fas fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="confirmModalTitle" class="text-base font-black text-slate-900 mb-2">تأكيد الإجراء</h3>
+            <p id="confirmModalMessage" class="text-xs text-slate-600 mb-6 leading-relaxed font-bold">هل أنت متأكد من المتابعة؟</p>
+            <div class="flex items-center justify-center gap-3">
+                <button type="button" onclick="closeConfirmModal(false)" class="w-1/2 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-black transition">إلغاء</button>
+                <button type="button" id="confirmModalActionBtn" onclick="closeConfirmModal(true)" class="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-lg shadow-rose-600/30 transition">نعم، تنفيذ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Screen (Firebase Authentication) -->
+    <div id="loginScreen" class="fixed inset-0 bg-slate-950 z-[60] flex items-center justify-center p-4 no-print">
+        <form id="loginForm" onsubmit="submitLogin(event)" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border-2 border-indigo-600">
+            <div class="bg-slate-950 text-white p-6 text-center border-b-4 border-indigo-600">
+                <div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-3">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <p class="text-indigo-400 text-xs font-black">كلية الهندسة / جامعة كلكامش</p>
+                <h2 class="text-lg font-black mt-1">تسجيل الدخول إلى نظام الأقساط</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <div id="loginError" class="hidden bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl p-3"></div>
+                <div>
+                    <label for="loginEmail" class="block text-xs font-black text-slate-700 mb-1">البريد الإلكتروني</label>
+                    <input type="email" id="loginEmail" required autocomplete="username" dir="ltr" class="w-full px-3 py-2.5 border-2 border-slate-300 rounded-xl text-xs font-bold font-num focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                </div>
+                <div>
+                    <label for="loginPassword" class="block text-xs font-black text-slate-700 mb-1">كلمة المرور</label>
+                    <input type="password" id="loginPassword" required autocomplete="current-password" dir="ltr" class="w-full px-3 py-2.5 border-2 border-slate-300 rounded-xl text-xs font-bold font-num focus:ring-2 focus:ring-indigo-600 focus:outline-none">
+                </div>
+                <button type="submit" id="loginSubmitBtn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-right-to-bracket"></i>
+                    <span>دخول</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Modern Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-5 left-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+    <!-- Application Script -->
+    <script>
+        // Default sample data to display immediately on first run
+        const DEFAULT_SEED_DATA = [
+            {
+                docId: 'doc_101',
+                name: 'علي حسن كاظم المحمداوي',
+                department: 'الهندسة المدنية',
+                stage: 'المرحلة الثالثة',
+                studyType: 'صباحي',
+                totalTuition: 2800000,
+                p1: 700000, r1: 'RC-10492',
+                p2: 700000, r2: 'RC-11025',
+                p3: 700000, r3: 'RC-11480',
+                p4: 700000, r4: 'RC-12091'
+            },
+            {
+                docId: 'doc_102',
+                name: 'زينب أحمد عبد الرضا التميمي',
+                department: 'هندسة تقنيات الحاسوب',
+                stage: 'المرحلة الثانية',
+                studyType: 'صباحي',
+                totalTuition: 3000000,
+                p1: 1000000, r1: 'RC-10112',
+                p2: 500000,  r2: 'RC-10884',
+                p3: 0, r3: '',
+                p4: 0, r4: ''
+            },
+            {
+                docId: 'doc_103',
+                name: 'محمد باقر جاسم الزيدي',
+                department: 'هندسة الطب الحياتي',
+                stage: 'المرحلة الأولى',
+                studyType: 'مسائي',
+                totalTuition: 3500000,
+                p1: 875000, r1: 'RC-10250',
+                p2: 0, r2: '',
+                p3: 0, r3: '',
+                p4: 0, r4: ''
+            },
+            {
+                docId: 'doc_104',
+                name: 'سارة عمر عبد الكريم الجبوري',
+                department: 'هندسة النفط والغاز',
+                stage: 'المرحلة الرابعة',
+                studyType: 'صباحي',
+                totalTuition: 3200000,
+                p1: 0, r1: '',
+                p2: 0, r2: '',
+                p3: 0, r3: '',
+                p4: 0, r4: ''
+            }
+        ];
+
+        // State initialization
+        let students = [];
+        let selectedDocIds = new Set();
+        let currentStatusFilter = 'all';
+        let pendingConfirmCallback = null;
+
+        // Security Utility: Escape HTML entities to prevent XSS injections
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return String(unsafe)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Modern UI Toast system (Replaces alert)
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const bgClass = type === 'success' ? 'bg-emerald-600 text-white' :
+                            type === 'error' ? 'bg-rose-600 text-white' :
+                            'bg-slate-900 text-white';
+
+            const iconClass = type === 'success' ? 'fa-circle-check text-emerald-200' :
+                              type === 'error' ? 'fa-circle-exclamation text-rose-200' :
+                              'fa-circle-info text-indigo-300';
+
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold border border-white/10 ${bgClass} transform transition-all duration-300 translate-y-3 opacity-0`;
+            
+            const iconEl = document.createElement('i');
+            iconEl.className = `fas ${iconClass} text-base`;
+            
+            const msgEl = document.createElement('span');
+            msgEl.className = 'flex-1';
+            msgEl.textContent = message;
+
+            toast.appendChild(iconEl);
+            toast.appendChild(msgEl);
+            container.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-3', 'opacity-0');
+            });
+
+            // Auto dismiss after 3.5s
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Modern Confirmation Modal (Replaces browser confirm)
+        function showConfirm(title, message, onConfirm, actionLabel = 'نعم، حذف') {
+            document.getElementById('confirmModalTitle').textContent = title;
+            document.getElementById('confirmModalMessage').textContent = message;
+            const actionBtn = document.getElementById('confirmModalActionBtn');
+            actionBtn.textContent = actionLabel;
+            pendingConfirmCallback = onConfirm;
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal(result) {
+            document.getElementById('confirmModal').classList.add('hidden');
+            if (result && typeof pendingConfirmCallback === 'function') {
+                pendingConfirmCallback();
+            }
+            pendingConfirmCallback = null;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Load saved logo
+            const savedLogo = localStorage.getItem('college_custom_logo');
+            if(savedLogo) {
+                document.getElementById('collegeLogo').src = savedLogo;
+                document.getElementById('printLogo').src = savedLogo;
+            }
+
+            populateDepartmentFilter();
+            renderStudentsTable();
+
+            // Keyboard shortcut support
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    closeConfirmModal(false);
+                }
+            });
+
+            // Firebase data layer is loaded by db.js (module scripts run before DOMContentLoaded)
+            if (!window.StudentDB) {
+                setDbStatus('error', 'غير متصل');
+                showLoginError('تعذر تحميل مكتبة Firebase. تأكد من اتصال الإنترنت ثم أعد تحميل الصفحة.');
+                return;
+            }
+            if (!StudentDB.isConfigured) {
+                setDbStatus('error', 'Firebase غير مُعدّ');
+                showLoginError('لم يتم إعداد Firebase بعد: يرجى تعبئة ملف firebase-config.js بإعدادات مشروعك.');
+                document.getElementById('loginSubmitBtn').disabled = true;
+                return;
+            }
+            StudentDB.onAuth(handleAuthChange);
+        });
+
+        // ===== Firebase: authentication & live data =====
+        const LEGACY_LOCAL_KEY = 'local_students_db';
+        let unsubscribeStudents = null;
+
+        function setDbStatus(state, text) {
+            const styles = {
+                ok: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                loading: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                error: 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+            };
+            document.getElementById('dbStatusBadge').className =
+                `${styles[state] || styles.loading} border text-[11px] px-2.5 py-0.5 rounded-full font-black flex items-center gap-1.5`;
+            document.getElementById('dbStatusText').textContent = text;
+        }
+
+        function dbErrorMessage(err) {
+            const code = err && err.code ? err.code : '';
+            const messages = {
+                'duplicate': err && err.message,
+                'permission-denied': 'ليس لديك صلاحية لتنفيذ هذا الإجراء، أو أن السجل موجود مسبقاً.',
+                'unavailable': 'تعذر الاتصال بقاعدة البيانات. تحقق من اتصال الإنترنت.',
+                'auth/invalid-credential': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+                'auth/invalid-login-credentials': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+                'auth/wrong-password': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+                'auth/user-not-found': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+                'auth/invalid-email': 'صيغة البريد الإلكتروني غير صحيحة.',
+                'auth/too-many-requests': 'محاولات كثيرة. يرجى الانتظار قليلاً ثم المحاولة مجدداً.',
+                'auth/network-request-failed': 'تعذر الاتصال بالخادم. تحقق من اتصال الإنترنت.'
+            };
+            return messages[code] || (err && err.message) || 'حدث خطأ غير متوقع.';
+        }
+
+        function showLoginError(message) {
+            const el = document.getElementById('loginError');
+            el.textContent = message;
+            el.classList.toggle('hidden', !message);
+        }
+
+        function handleAuthChange(user) {
+            if (unsubscribeStudents) { unsubscribeStudents(); unsubscribeStudents = null; }
+
+            if (!user) {
+                students = [];
+                selectedDocIds.clear();
+                populateDepartmentFilter();
+                renderStudentsTable();
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('currentUserEmail').textContent = '';
+                document.getElementById('migrateLocalBtn').classList.add('hidden');
+                setDbStatus('loading', 'بانتظار تسجيل الدخول');
+                return;
+            }
+
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('currentUserEmail').textContent = user.email || '';
+            setDbStatus('loading', 'جاري تحميل البيانات...');
+
+            unsubscribeStudents = StudentDB.subscribe(list => {
+                students = list;
+                const ids = new Set(list.map(s => s.docId));
+                selectedDocIds = new Set([...selectedDocIds].filter(id => ids.has(id)));
+                populateDepartmentFilter();
+                renderStudentsTable();
+                setDbStatus('ok', 'متصل بقاعدة البيانات');
+            }, err => {
+                setDbStatus('error', 'خطأ في الاتصال');
+                showToast(dbErrorMessage(err), 'error');
+            });
+
+            updateMigrateButton();
+        }
+
+        async function submitLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('loginSubmitBtn');
+            btn.disabled = true;
+            showLoginError('');
+            try {
+                await StudentDB.login(
+                    document.getElementById('loginEmail').value.trim(),
+                    document.getElementById('loginPassword').value
+                );
+                document.getElementById('loginPassword').value = '';
+            } catch (err) {
+                showLoginError(dbErrorMessage(err));
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function logout() {
+            showConfirm('تسجيل الخروج', 'هل تريد تسجيل الخروج من النظام؟', () => StudentDB.logout(), 'تسجيل الخروج');
+        }
+
+        // Insert many records, skipping duplicates, and report the outcome
+        async function runImport(rows) {
+            setDbStatus('loading', 'جاري رفع البيانات...');
+            try {
+                const result = await StudentDB.importStudents(rows, new Set(students.map(s => s.docId)));
+                const dupCount = result.duplicates.length;
+
+                if (result.added > 0) showToast(`تمت إضافة ${result.added} طالب إلى قاعدة البيانات بنجاح!`, 'success');
+                if (dupCount > 0) {
+                    const sample = result.duplicates.slice(0, 3).join('، ');
+                    showToast(`تم تجاهل ${dupCount} سجل مكرر: ${sample}${dupCount > 3 ? ' وغيرهم' : ''}`, 'info');
+                    console.table(result.duplicates.map(name => ({ 'سجل مكرر لم يُضف': name })));
+                }
+                if (result.failed.length > 0) {
+                    showToast(`تعذر رفع ${result.failed.length} سجل: ${dbErrorMessage(result.failed[0].error)}`, 'error');
+                    console.error('Failed rows:', result.failed);
+                }
+                if (result.added === 0 && dupCount === 0 && result.failed.length === 0) {
+                    showToast('لم يتم العثور على سجلات صالحة للإضافة!', 'info');
+                }
+                return result;
+            } catch (err) {
+                showToast(dbErrorMessage(err), 'error');
+                return null;
+            } finally {
+                setDbStatus('ok', 'متصل بقاعدة البيانات');
+            }
+        }
+
+        function readLegacyLocalData() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(LEGACY_LOCAL_KEY) || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function updateMigrateButton() {
+            const count = readLegacyLocalData().length;
+            document.getElementById('localCount').textContent = count;
+            document.getElementById('migrateLocalBtn').classList.toggle('hidden', count === 0);
+        }
+
+        // One-time move of records saved in this browser (before Firebase) into the database
+        function migrateLocalData() {
+            const legacy = readLegacyLocalData();
+            if (legacy.length === 0) return updateMigrateButton();
+            showConfirm(
+                'نقل البيانات المحلية',
+                `سيتم رفع (${legacy.length}) سجل محفوظ في هذا المتصفح إلى قاعدة البيانات مع تجاهل السجلات المكررة. متابعة؟`,
+                async () => {
+                    const result = await runImport(legacy);
+                    if (result && result.failed.length === 0) {
+                        localStorage.removeItem(LEGACY_LOCAL_KEY);
+                        updateMigrateButton();
+                    }
+                },
+                'نقل الآن'
+            );
+        }
+
+        function resetToSampleData() {
+            showConfirm(
+                'إضافة البيانات التجريبية',
+                'هل تريد إضافة السجلات النموذجية إلى قاعدة البيانات؟ (لن تُضاف السجلات المكررة)',
+                () => runImport(DEFAULT_SEED_DATA),
+                'إضافة الآن'
+            );
+        }
+
+        function uploadLogoFromComputer(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Restrict file size (max 2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                showToast('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 2 ميغابايت.', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const logoBase64 = e.target.result;
+                document.getElementById('collegeLogo').src = logoBase64;
+                document.getElementById('printLogo').src = logoBase64;
+                try {
+                    localStorage.setItem('college_custom_logo', logoBase64);
+                    showToast('تم تحديث شعار الكلية بنجاح!', 'success');
+                } catch(err) {
+                    showToast('تعذر حفظ الشعار محلياً بسبب سعة التخزين.', 'error');
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function formatMoney(amount, isRemaining = false) {
+            const num = Number(amount) || 0;
+            const colorClass = isRemaining ? (num > 0 ? 'text-rose-600' : 'text-slate-400') : 'text-slate-900';
+            return `<span class="text-xs font-black font-num ${colorClass}">${num.toLocaleString('en-US')}</span> <span class="text-[10px] text-slate-500 font-bold">IQD</span>`;
+        }
+
+        function populateDepartmentFilter() {
+            const select = document.getElementById('deptFilter');
+            const currentSelected = select.value;
+            const depts = [...new Set(students.map(s => s.department ? s.department.trim() : '').filter(Boolean))];
+            select.innerHTML = '<option value="">جميع الأقسام العلمية</option>';
+            depts.forEach(d => { 
+                const selected = d === currentSelected ? 'selected' : '';
+                const safeDept = escapeHtml(d);
+                select.innerHTML += `<option value="${safeDept}" ${selected}>${safeDept}</option>`; 
+            });
+        }
+
+        function setFilterStatus(status) {
+            currentStatusFilter = status;
+            const mapKeys = {
+                'all': 'statusBtnAll',
+                'p25': 'statusBtnP25',
+                'p50': 'statusBtnP50',
+                'p75': 'statusBtnP75',
+                'p100': 'statusBtnP100',
+                'none': 'statusBtnNone'
+            };
+
+            Object.keys(mapKeys).forEach(k => {
+                const btn = document.getElementById(mapKeys[k]);
+                if(btn) {
+                    if (k === status) {
+                        btn.className = "px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition";
+                    } else {
+                        btn.className = "px-3 py-1.5 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition";
+                    }
+                }
+            });
+
+            renderStudentsTable();
+        }
+
+        function renderStudentsTable() {
+            const tbody = document.getElementById('studentsTableBody');
+            const searchValue = document.getElementById('searchInput').value.trim().toLowerCase();
+            const deptVal = document.getElementById('deptFilter').value.trim();
+            const stageVal = document.getElementById('stageFilter').value.trim();
+            const studyVal = document.getElementById('studyFilter').value.trim();
+
+            let filtered = students.filter(s => {
+                const sName = (s.name || '').toLowerCase();
+                const sR1 = (s.r1 || '').toLowerCase();
+                const sR2 = (s.r2 || '').toLowerCase();
+                const sR3 = (s.r3 || '').toLowerCase();
+                const sR4 = (s.r4 || '').toLowerCase();
+
+                const matchSearch = !searchValue || sName.includes(searchValue) || sR1.includes(searchValue) || sR2.includes(searchValue) || sR3.includes(searchValue) || sR4.includes(searchValue);
+                const matchDept = !deptVal || (s.department || '').trim() === deptVal;
+                const matchStage = !stageVal || (s.stage || '').trim() === stageVal;
+                const matchStudy = !studyVal || (s.studyType || '').trim() === studyVal;
+
+                const totalPaid = (Number(s.p1)||0) + (Number(s.p2)||0) + (Number(s.p3)||0) + (Number(s.p4)||0);
+                const totalTuition = Number(s.totalTuition)||0;
+                const ratio = totalTuition > 0 ? (totalPaid / totalTuition) : 0;
+                
+                let matchStatus = true;
+                if(currentStatusFilter === 'p25') matchStatus = ratio >= 0.25;
+                if(currentStatusFilter === 'p50') matchStatus = ratio >= 0.50;
+                if(currentStatusFilter === 'p75') matchStatus = ratio >= 0.75;
+                if(currentStatusFilter === 'p100') matchStatus = ratio >= 1.0;
+                if(currentStatusFilter === 'none') matchStatus = totalPaid === 0;
+
+                return matchSearch && matchDept && matchStage && matchStudy && matchStatus;
+            });
+
+            let totalReq = 0, totalPaidAll = 0;
+            students.forEach(s => {
+                totalReq += (Number(s.totalTuition)||0);
+                totalPaidAll += ((Number(s.p1)||0) + (Number(s.p2)||0) + (Number(s.p3)||0) + (Number(s.p4)||0));
+            });
+
+            document.getElementById('statTotalStudents').textContent = filtered.length.toLocaleString('en-US');
+            document.getElementById('statTotalRequired').innerHTML = formatMoney(totalReq);
+            document.getElementById('statTotalPaid').innerHTML = formatMoney(totalPaidAll);
+            document.getElementById('statTotalRemaining').innerHTML = formatMoney(Math.max(0, totalReq - totalPaidAll), true);
+
+            tbody.innerHTML = '';
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="14" class="text-center py-12 text-slate-400 font-bold text-xs"><i class="fas fa-folder-open text-3xl mb-2 block text-slate-300"></i>لا توجد بيانات مطابقة لخيارات البحث أو التصفية</td></tr>`;
+                updateBulkDeleteButton();
+                return;
+            }
+
+            filtered.forEach((s, idx) => {
+                const p1 = Number(s.p1) || 0, p2 = Number(s.p2) || 0, p3 = Number(s.p3) || 0, p4 = Number(s.p4) || 0;
+                const paid = p1 + p2 + p3 + p4;
+                const tuition = Number(s.totalTuition) || 0;
+                const remaining = Math.max(0, tuition - paid);
+                const pct = tuition > 0 ? Math.min(100, Math.round((paid / tuition) * 100)) : 0;
+
+                // Status Badge & progress indicator
+                let statusBadge = '';
+                if (paid >= tuition && tuition > 0) {
+                    statusBadge = `
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-600 text-white shadow-sm w-full justify-center">
+                                <i class="fas fa-check-circle"></i>
+                                <span>مسدد بالكامل (100%)</span>
+                            </span>
+                            <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden no-print">
+                                <div class="bg-emerald-600 h-1.5 rounded-full" style="width: 100%"></div>
+                            </div>
+                        </div>`;
+                } else if (paid > 0) {
+                    statusBadge = `
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-amber-500 text-slate-950 shadow-sm w-full justify-center">
+                                <i class="fas fa-clock"></i>
+                                <span>سداد جزئي (${pct}%)</span>
+                            </span>
+                            <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden no-print">
+                                <div class="bg-amber-500 h-1.5 rounded-full" style="width: ${pct}%"></div>
+                            </div>
+                        </div>`;
+                } else {
+                    statusBadge = `
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-rose-600 text-white shadow-sm w-full justify-center">
+                                <i class="fas fa-times-circle"></i>
+                                <span>غير مسدد (0%)</span>
+                            </span>
+                            <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden no-print">
+                                <div class="bg-rose-600 h-1.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>`;
+                }
+
+                const isChecked = selectedDocIds.has(s.docId);
+
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-slate-50 transition border-b border-slate-200 ${isChecked ? 'bg-indigo-50/70' : ''}`;
+                
+                // Securely escaped properties
+                const safeName = escapeHtml(s.name);
+                const safeDept = escapeHtml(s.department || '-');
+                const safeStage = escapeHtml(s.stage || '-');
+                const safeStudy = escapeHtml(s.studyType || 'صباحي');
+                const safeR1 = escapeHtml(s.r1 || '');
+                const safeR2 = escapeHtml(s.r2 || '');
+                const safeR3 = escapeHtml(s.r3 || '');
+                const safeR4 = escapeHtml(s.r4 || '');
+                const safeDocId = escapeHtml(s.docId);
+
+                tr.innerHTML = `
+                    <td class="p-3 text-center no-print">
+                        <input type="checkbox" value="${safeDocId}" ${isChecked ? 'checked' : ''} onchange="toggleSelectStudent(this, '${safeDocId}')" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer">
+                    </td>
+                    <td class="p-3 text-center font-num font-black text-indigo-900 bg-slate-50 text-xs">${idx + 1}</td>
+                    <td class="p-3 font-black text-slate-900 text-xs">${safeName}</td>
+                    <td class="p-3 font-bold text-slate-800">${safeDept} <div class="text-[10px] text-slate-500">${safeStage}</div></td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-0.5 rounded-md text-[10px] font-black ${s.studyType === 'مسائي' ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}">${safeStudy}</span>
+                    </td>
+                    <td class="p-3 text-left font-num">${formatMoney(tuition)}</td>
+                    <td class="p-2 text-center bg-slate-50 border-x border-slate-200">
+                        ${p1 > 0 ? `<div class="font-num font-black text-emerald-700 text-xs">${p1.toLocaleString('en-US')}</div><div class="text-[10px] font-bold text-indigo-900 font-num">وصل: ${safeR1 || '-'}</div>` : '<span class="text-slate-400 font-normal">-</span>'}
+                    </td>
+                    <td class="p-2 text-center bg-slate-50 border-x border-slate-200">
+                        ${p2 > 0 ? `<div class="font-num font-black text-emerald-700 text-xs">${p2.toLocaleString('en-US')}</div><div class="text-[10px] font-bold text-indigo-900 font-num">وصل: ${safeR2 || '-'}</div>` : '<span class="text-slate-400 font-normal">-</span>'}
+                    </td>
+                    <td class="p-2 text-center bg-slate-50 border-x border-slate-200">
+                        ${p3 > 0 ? `<div class="font-num font-black text-emerald-700 text-xs">${p3.toLocaleString('en-US')}</div><div class="text-[10px] font-bold text-indigo-900 font-num">وصل: ${safeR3 || '-'}</div>` : '<span class="text-slate-400 font-normal">-</span>'}
+                    </td>
+                    <td class="p-2 text-center bg-slate-50 border-x border-slate-200">
+                        ${p4 > 0 ? `<div class="font-num font-black text-emerald-700 text-xs">${p4.toLocaleString('en-US')}</div><div class="text-[10px] font-bold text-indigo-900 font-num">وصل: ${safeR4 || '-'}</div>` : '<span class="text-slate-400 font-normal">-</span>'}
+                    </td>
+                    <td class="p-3 text-left font-num font-black text-emerald-800">${formatMoney(paid)}</td>
+                    <td class="p-3 text-left font-num font-black">${formatMoney(remaining, true)}</td>
+                    <td class="p-3 text-center">${statusBadge}</td>
+                    <td class="p-3 text-center no-print">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <button onclick="openEditModal('${safeDocId}')" class="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition border border-indigo-200" title="تعديل">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteStudent('${safeDocId}')" class="p-1.5 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition border border-rose-200" title="حذف">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            updateBulkDeleteButton();
+        }
+
+        function toggleSelectStudent(checkbox, docId) {
+            checkbox.checked ? selectedDocIds.add(docId) : selectedDocIds.delete(docId);
+            updateBulkDeleteButton();
+        }
+
+        function toggleSelectAll(masterCheckbox) {
+            document.querySelectorAll('#studentsTableBody input[type="checkbox"]').forEach(cb => {
+                cb.checked = masterCheckbox.checked;
+                masterCheckbox.checked ? selectedDocIds.add(cb.value) : selectedDocIds.delete(cb.value);
+            });
+            renderStudentsTable();
+        }
+
+        function updateBulkDeleteButton() {
+            const btn = document.getElementById('bulkDeleteBtn');
+            const countEl = document.getElementById('selectedCount');
+            if (selectedDocIds.size > 0) {
+                btn.classList.remove('hidden');
+                countEl.textContent = selectedDocIds.size;
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        function confirmDeleteSelected() {
+            if (selectedDocIds.size === 0) return;
+            showConfirm(
+                'حذف الطلبة المحددين',
+                `هل أنت متأكد من حذف (${selectedDocIds.size}) طالب من السجلات نهائياً؟`,
+                async () => {
+                    const ids = [...selectedDocIds];
+                    try {
+                        await StudentDB.deleteStudents(ids);
+                        ids.forEach(id => selectedDocIds.delete(id));
+                        updateBulkDeleteButton();
+                        showToast(`تم حذف ${ids.length} طالب بنجاح!`, 'success');
+                    } catch (err) {
+                        showToast(dbErrorMessage(err), 'error');
+                    }
+                },
+                'حذف المحدد'
+            );
+        }
+
+        function openAddModal() {
+            document.getElementById('studentForm').reset();
+            document.getElementById('studentDocId').value = '';
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-plus text-amber-400"></i><span>إضافة طالب جديد</span>';
+            document.getElementById('studentModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('modalName').focus(), 100);
+        }
+
+        function openEditModal(docId) {
+            const s = students.find(item => item.docId === docId);
+            if(!s) return;
+            document.getElementById('studentDocId').value = s.docId;
+            document.getElementById('modalName').value = s.name || '';
+            document.getElementById('modalDept').value = s.department || '';
+            document.getElementById('modalStage').value = s.stage || 'المرحلة الأولى';
+            document.getElementById('modalStudy').value = s.studyType || 'صباحي';
+            document.getElementById('modalTotalTuition').value = s.totalTuition || 0;
+            document.getElementById('modalP1').value = s.p1 || '';
+            document.getElementById('modalR1').value = s.r1 || '';
+            document.getElementById('modalP2').value = s.p2 || '';
+            document.getElementById('modalR2').value = s.r2 || '';
+            document.getElementById('modalP3').value = s.p3 || '';
+            document.getElementById('modalR3').value = s.r3 || '';
+            document.getElementById('modalP4').value = s.p4 || '';
+            document.getElementById('modalR4').value = s.r4 || '';
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user-pen text-indigo-400"></i><span>تعديل بيانات الطالب</span>';
+            document.getElementById('studentModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('studentModal').classList.add('hidden');
+        }
+
+        async function saveStudent(e) {
+            e.preventDefault();
+            const docId = document.getElementById('studentDocId').value;
+            const isEditing = Boolean(docId);
+
+            const studentData = {
+                name: document.getElementById('modalName').value.trim(),
+                department: document.getElementById('modalDept').value.trim(),
+                stage: document.getElementById('modalStage').value.trim(),
+                studyType: document.getElementById('modalStudy').value.trim(),
+                totalTuition: Number(document.getElementById('modalTotalTuition').value) || 0,
+                p1: Number(document.getElementById('modalP1').value) || 0,
+                r1: document.getElementById('modalR1').value.trim(),
+                p2: Number(document.getElementById('modalP2').value) || 0,
+                r2: document.getElementById('modalR2').value.trim(),
+                p3: Number(document.getElementById('modalP3').value) || 0,
+                r3: document.getElementById('modalR3').value.trim(),
+                p4: Number(document.getElementById('modalP4').value) || 0,
+                r4: document.getElementById('modalR4').value.trim()
+            };
+
+            const submitBtn = document.querySelector('#studentForm button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                if (isEditing) {
+                    await StudentDB.updateStudent(docId, studentData);
+                } else {
+                    await StudentDB.addStudent(studentData);
+                }
+                closeModal();
+                showToast(isEditing ? 'تم تحديث بيانات الطالب بنجاح!' : 'تمت إضافة الطالب الجديد بنجاح!', 'success');
+            } catch (err) {
+                // Keep the modal open so the user can correct the name/department/stage
+                showToast(dbErrorMessage(err), 'error');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        function deleteStudent(docId) {
+            const student = students.find(s => s.docId === docId);
+            const studentName = student ? student.name : 'هذا الطالب';
+            
+            showConfirm(
+                'حذف سجل الطالب',
+                `هل أنت متأكد من حذف الطالب "${studentName}"؟`,
+                async () => {
+                    try {
+                        await StudentDB.deleteStudent(docId);
+                        selectedDocIds.delete(docId);
+                        updateBulkDeleteButton();
+                        showToast('تم حذف الطالب بنجاح!', 'success');
+                    } catch (err) {
+                        showToast(dbErrorMessage(err), 'error');
+                    }
+                },
+                'حذف'
+            );
+        }
+
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                let rows;
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.SheetNames[0];
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+
+                    // First non-empty value among the accepted column names
+                    const pick = (row, keys) => {
+                        const key = keys.find(k => row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '');
+                        return key ? row[key] : '';
+                    };
+
+                    rows = json
+                        .map(row => ({
+                            name: String(pick(row, ['الاسم', 'اسم الطالب', 'اسم الطالب الرباعي'])).trim(),
+                            department: String(pick(row, ['القسم', 'القسم العلمي']) || 'عام').trim(),
+                            stage: String(pick(row, ['المرحلة', 'المرحلة الدراسية']) || 'المرحلة الأولى').trim(),
+                            studyType: String(pick(row, ['الدراسة', 'نوع الدراسة']) || 'صباحي').trim(),
+                            totalTuition: Number(pick(row, ['القسط الكلي', 'القسط الكلي (IQD)', 'القسط السنوي', 'القسط'])) || 2000000,
+                            p1: Number(pick(row, ['الدفعة الأولى', 'الدفعة 1', 'الدفعة 1 (IQD)', 'دفعة 1'])) || 0,
+                            r1: String(pick(row, ['وصل 1', 'رقم وصل 1'])).trim(),
+                            p2: Number(pick(row, ['الدفعة الثانية', 'الدفعة 2', 'الدفعة 2 (IQD)', 'دفعة 2'])) || 0,
+                            r2: String(pick(row, ['وصل 2', 'رقم وصل 2'])).trim(),
+                            p3: Number(pick(row, ['الدفعة الثالثة', 'الدفعة 3', 'الدفعة 3 (IQD)', 'دفعة 3'])) || 0,
+                            r3: String(pick(row, ['وصل 3', 'رقم وصل 3'])).trim(),
+                            p4: Number(pick(row, ['الدفعة الرابعة', 'الدفعة 4', 'الدفعة 4 (IQD)', 'دفعة 4'])) || 0,
+                            r4: String(pick(row, ['وصل 4', 'رقم وصل 4'])).trim()
+                        }))
+                        .filter(s => s.name.length > 0);
+                } catch (err) {
+                    showToast('حدث خطأ أثناء قراءة ملف الإكسل. يرجى التأكد من صحة الملف!', 'error');
+                    return;
+                } finally {
+                    event.target.value = ''; // Reset file input so the same file can be re-selected
+                }
+
+                await runImport(rows);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function exportToExcel() {
+            if (students.length === 0) {
+                showToast('لا توجد بيانات متاحة للتصدير!', 'info');
+                return;
+            }
+
+            const exportData = students.map((s, idx) => {
+                const paid = (Number(s.p1)||0) + (Number(s.p2)||0) + (Number(s.p3)||0) + (Number(s.p4)||0);
+                const tuition = Number(s.totalTuition)||0;
+                let statusText = '0% (غير مسدد)';
+                if(paid >= tuition && tuition > 0) statusText = '100% (مسدد بالكامل)';
+                else if(paid > 0) statusText = Math.round((paid / tuition) * 100) + '% (سداد جزئي)';
+
+                return {
+                    "ت": idx + 1,
+                    "اسم الطالب": s.name,
+                    "القسم": s.department,
+                    "المرحلة": s.stage,
+                    "الدراسة": s.studyType,
+                    "القسط الكلي (IQD)": s.totalTuition,
+                    "الدفعة 1 (IQD)": s.p1,
+                    "وصل 1": s.r1,
+                    "الدفعة 2 (IQD)": s.p2,
+                    "وصل 2": s.r2,
+                    "الدفعة 3 (IQD)": s.p3,
+                    "وصل 3": s.r3,
+                    "الدفعة 4 (IQD)": s.p4,
+                    "وصل 4": s.r4,
+                    "المسدد الكلي": paid,
+                    "المتبقي": Math.max(0, tuition - paid),
+                    "حالة السداد": statusText
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "أقساط الطلبة");
+            
+            const today = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `أقساط_طلبة_كلية_الهندسة_${today}.xlsx`);
+            showToast('تم تصدير ملف الإكسل بنجاح!', 'success');
+        }
+
+        function downloadSampleExcel() {
+            const sample = [
+                {
+                    "اسم الطالب": "علي حسن كاظم",
+                    "القسم": "الهندسة المدنية",
+                    "المرحلة": "المرحلة الأولى",
+                    "الدراسة": "صباحي",
+                    "القسط الكلي": 2500000,
+                    "الدفعة الأولى": 625000,
+                    "وصل 1": "W-1001",
+                    "الدفعة الثانية": 625000,
+                    "وصل 2": "W-1045",
+                    "الدفعة الثالثة": 0,
+                    "وصل 3": "",
+                    "الدفعة الرابعة": 0,
+                    "وصل 4": ""
+                },
+                {
+                    "اسم الطالب": "زينب جاسم كريم",
+                    "القسم": "هندسة تقنيات الحاسوب",
+                    "المرحلة": "المرحلة الثانية",
+                    "الدراسة": "مسائي",
+                    "القسط الكلي": 2200000,
+                    "الدفعة الأولى": 550000,
+                    "وصل 1": "W-1002",
+                    "الدفعة الثانية": 0,
+                    "وصل 2": "",
+                    "الدفعة الثالثة": 0,
+                    "وصل 3": "",
+                    "الدفعة الرابعة": 0,
+                    "وصل 4": ""
+                }
+            ];
+            const ws = XLSX.utils.json_to_sheet(sample);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "نموذج الأقساط");
+            XLSX.writeFile(wb, "قالب_رفع_أقساط_الطلاب.xlsx");
+            showToast('تم تنزيل قالب الإكسل النموذجي بنجاح!', 'info');
+        }
+
+        function printReport() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('ar-IQ', { year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('printDate').textContent = dateStr;
+            document.getElementById('printStudentCount').textContent = students.length;
+            window.print();
+        }
+    </script>
+</body>
+</html>

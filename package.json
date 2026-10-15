@@ -1,0 +1,21 @@
+{
+  "name": "tuition-management-app",
+  "version": "1.0.0",
+  "description": "نظام إدارة الأقساط - كلية الهندسة / جامعة كلكامش (Tuition Management System)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "tuition",
+    "management",
+    "college",
+    "university",
+    "iraq",
+    "gilgamesh",
+    "accounting"
+  ],
+  "author": "Engineering College / Gilgamesh University",
+  "license": "MIT"
+}
